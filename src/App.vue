@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import * as echarts from 'echarts'
 import {
@@ -58,10 +58,10 @@ const viewTitles: Record<ViewKey, { title: string; description: string }> = {
 }
 
 const stats = ref([
-  { label: '水表总数', value: '1,000', note: '在线 986 台', icon: Odometer, tone: 'cyan' },
-  { label: '今日抄表率', value: '98.6%', note: '较昨日 +1.2%', icon: CircleCheck, tone: 'green' },
-  { label: '本月应收', value: '¥86,420', note: '已收 91.2%', icon: Coin, tone: 'blue' },
-  { label: '待处理异常', value: '12', note: '高风险 3 条', icon: Warning, tone: 'orange' },
+  { label: '水表总数', value: '1,000', note: '在线 986 台', icon: markRaw(Odometer), tone: 'cyan' },
+  { label: '今日抄表率', value: '98.6%', note: '较昨日 +1.2%', icon: markRaw(CircleCheck), tone: 'green' },
+  { label: '本月应收', value: '¥86,420', note: '已收 91.2%', icon: markRaw(Coin), tone: 'blue' },
+  { label: '待处理异常', value: '12', note: '高风险 3 条', icon: markRaw(Warning), tone: 'orange' },
 ])
 
 const meters = ref([
