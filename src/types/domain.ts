@@ -6,6 +6,32 @@ export type MeterStatus = '在线' | '异常' | '离线'
 export type RiskLevel = '高' | '中' | '低'
 export type AnomalyStatus = '待处理' | '处理中' | '已完成'
 
+export interface UserSession {
+  id: string
+  username: string
+  name: string
+  phone?: string
+  role: Role
+  title: string
+}
+
+export interface RegistrationPayload {
+  username: string
+  name: string
+  phone: string
+  password: string
+}
+
+export interface SystemNotification {
+  id: string
+  title: string
+  content: string
+  time: string
+  type: 'warning' | 'info' | 'success'
+  route?: string
+  roles: Role[]
+}
+
 export interface NavigationItem {
   path: string
   label: string

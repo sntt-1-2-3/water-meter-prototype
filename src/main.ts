@@ -1,7 +1,8 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import {
-  ElAvatar, ElBadge, ElButton, ElDialog, ElDrawer, ElForm, ElFormItem, ElIcon,
+  ElAvatar, ElBadge, ElButton, ElDialog, ElDrawer, ElDropdown, ElDropdownItem,
+  ElDropdownMenu, ElForm, ElFormItem, ElIcon,
   ElInput, ElInputNumber, ElMenu, ElMenuItem, ElOption, ElPagination, ElProgress,
   ElRadioButton, ElRadioGroup, ElResult, ElSelect, ElSkeleton, ElTable,
   ElTableColumn, ElTag,
@@ -14,7 +15,8 @@ import router from './router'
 const app = createApp(App)
 
 const elementComponents = [
-  ElAvatar, ElBadge, ElButton, ElDialog, ElDrawer, ElForm, ElFormItem, ElIcon,
+  ElAvatar, ElBadge, ElButton, ElDialog, ElDrawer, ElDropdown, ElDropdownItem,
+  ElDropdownMenu, ElForm, ElFormItem, ElIcon,
   ElInput, ElInputNumber, ElMenu, ElMenuItem, ElOption, ElPagination, ElProgress,
   ElRadioButton, ElRadioGroup, ElResult, ElSelect, ElSkeleton, ElTable,
   ElTableColumn, ElTag,
