@@ -1,0 +1,30 @@
+package com.zhishuiyun.water.config;
+
+import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.info.Info;
+import io.swagger.v3.oas.models.security.SecurityRequirement;
+import io.swagger.v3.oas.models.security.SecurityScheme;
+import io.swagger.v3.oas.models.Components;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class OpenApiConfig {
+
+    private static final String SCHEME = "bearerAuth";
+
+    @Bean
+    public OpenAPI waterOpenApi() {
+        return new OpenAPI()
+                .info(new Info()
+                        .title("智水云 AI 水表收费管理系统 API")
+                        .description("A06 后端接口文档（Spring Boot + SQLite）")
+                        .version("0.1.0"))
+                .addSecurityItem(new SecurityRequirement().addList(SCHEME))
+                .components(new Components().addSecuritySchemes(SCHEME,
+                        new SecurityScheme()
+                                .type(SecurityScheme.Type.HTTP)
+                                .scheme("bearer")
+                                .bearerFormat("JWT")));
+    }
+}
