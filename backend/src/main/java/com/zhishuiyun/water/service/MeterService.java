@@ -30,9 +30,13 @@ public class MeterService {
 
     private final MeterRepository meterRepository;
     private final AuditService auditService;
+    private final AccessPolicy accessPolicy;
 
     @Transactional(readOnly = true)
     public PageResult<MeterDto> page(int page, int pageSize, String keyword, String type, AuthUser user) {
+        if (page < 1 || pageSize < 1 || pageSize > 200) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "页码须大于0，每页条数须为1至200");
+        }
         Specification<Meter> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
             if (keyword != null && !keyword.isBlank()) {
@@ -43,7 +47,11 @@ public class MeterService {
                         cb.like(root.get("area"), like)));
             }
             if (type != null && !type.isBlank() && !"全部类型".equals(type)) {
-                predicates.add(cb.equal(root.get("type"), DomainEnums.MeterType.valueOf(type)));
+                try {
+                    predicates.add(cb.equal(root.get("type"), DomainEnums.MeterType.valueOf(type)));
+                } catch (IllegalArgumentException e) {
+                    throw new BusinessException(ErrorCode.BAD_REQUEST, "无效的水表类型");
+                }
             }
             applyDataScope(predicates, cb, root, user);
             return cb.and(predicates.toArray(new Predicate[0]));
@@ -59,12 +67,12 @@ public class MeterService {
         if (req.meterId() == null || req.meterId().isBlank()) {
             throw new BusinessException(ErrorCode.METER_ID_REQUIRED);
         }
-        requireAdminOrOperator(user);
+        accessPolicy.requireManageMeters(user);
         if (meterRepository.existsByMeterId(req.meterId())) {
             throw new BusinessException(ErrorCode.METER_ID_DUPLICATE);
         }
         String area = req.area();
-        if (user.getAreaScope() != null && !user.canAccessArea(area)) {
+        if (!accessPolicy.canAccessArea(user, area)) {
             throw new BusinessException(ErrorCode.FORBIDDEN); // 运营人员只能在所属区域建档
         }
         Meter meter = Meter.builder()
@@ -86,12 +94,10 @@ public class MeterService {
 
     @Transactional
     public MeterDto update(String meterId, MeterRequest req, AuthUser user) {
-        requireAdminOrOperator(user);
+        accessPolicy.requireManageMeters(user);
         Meter meter = meterRepository.findByMeterId(meterId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.METER_NOT_FOUND));
-        if (user.getAreaScope() != null && !user.canAccessArea(meter.getArea())) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
-        }
+        accessPolicy.requireAccessMeter(user, meter);
         if (req.userName() != null) meter.setUserName(req.userName());
         if (req.area() != null && user.getAreaScope() == null) meter.setArea(req.area());
         if (req.type() != null) meter.setType(req.type());
@@ -111,20 +117,18 @@ public class MeterService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.METER_NOT_FOUND));
     }
 
-    private void requireAdminOrOperator(AuthUser user) {
-        if (user.getRole() != DomainEnums.AccountRole.ADMIN
-                && user.getRole() != DomainEnums.AccountRole.OPERATOR) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
-        }
-    }
-
     private void applyDataScope(List<Predicate> predicates, jakarta.persistence.criteria.CriteriaBuilder cb,
                                 jakarta.persistence.criteria.Root<Meter> root, AuthUser user) {
-        if (user.areaList() != null) {
+        if (user.isUser()) {
+            if (user.getBoundMeterId() == null || user.getBoundMeterId().isBlank()) {
+                predicates.add(cb.disjunction());
+            } else {
+                predicates.add(cb.equal(root.get("meterId"), user.getBoundMeterId()));
+            }
+        } else if (user.getRole() == DomainEnums.AccountRole.OPERATOR) {
             predicates.add(root.get("area").in(user.areaList()));
-        }
-        if (user.getBoundMeterId() != null) {
-            predicates.add(cb.equal(root.get("meterId"), user.getBoundMeterId()));
+        } else if (user.getRole() == null) {
+            predicates.add(cb.disjunction());
         }
     }
 }

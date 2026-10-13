@@ -62,4 +62,20 @@ public class ReadingTask {
     private LocalDateTime startTime;
 
     private LocalDateTime endTime;
+
+    private String createdBy;
+    private String createdRole;
+    private String areaScope;
+    private String executionBy;
+    private Boolean systemTask;
+    @Column(length = 12000)
+    private String targetMeterIds;
+    @Column(length = 12000)
+    private String completedMeterIds;
+    @Column(length = 12000)
+    private String failedMeterIds;
+    @Column(length = 12000)
+    private String retryAttemptedMeterIds;
+    private Boolean simulateFailure;
+    private Boolean failureInjected;
 }

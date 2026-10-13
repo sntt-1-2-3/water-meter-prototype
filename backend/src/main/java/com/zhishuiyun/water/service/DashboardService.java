@@ -1,85 +1,72 @@
 package com.zhishuiyun.water.service;
 
 import com.zhishuiyun.water.dto.DashboardData;
-import com.zhishuiyun.water.entity.Bill;
-import com.zhishuiyun.water.entity.DomainEnums;
-import com.zhishuiyun.water.entity.Reading;
+import com.zhishuiyun.water.entity.*;
 import com.zhishuiyun.water.repository.AnomalyRepository;
-import com.zhishuiyun.water.repository.BillRepository;
-import com.zhishuiyun.water.repository.MeterRepository;
+import com.zhishuiyun.water.repository.BillItemRepository;
 import com.zhishuiyun.water.repository.ReadingRepository;
 import com.zhishuiyun.water.security.AuthUser;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-
+import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
+import java.time.YearMonth;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class DashboardService {
-
-    private final MeterRepository meterRepository;
     private final ReadingRepository readingRepository;
     private final AnomalyRepository anomalyRepository;
-    private final BillRepository billRepository;
+    private final BillItemRepository billItemRepository;
+    private final AccessPolicy accessPolicy;
 
+    @Transactional(readOnly = true)
     public DashboardData getDashboard(AuthUser user) {
-        long totalMeters = meterRepository.count();
-
-        // 今日抄表率：近 24 小时有上报的表占比
-        LocalDateTime dayStart = LocalDate.now().atStartOfDay();
-        long reportedToday = readingRepository.countByTsBetween(dayStart, LocalDateTime.now());
-        int coverage = totalMeters == 0 ? 0
-                : (int) Math.min(100, reportedToday * 100 / totalMeters);
-
-        // 本月应收：本月账单批次合计
-        String period = String.format("%04d-%02d", LocalDate.now().getYear(), LocalDate.now().getMonthValue());
-        BigDecimal receivable = billRepository.findAllByOrderByBatchNoDesc().stream()
-                .filter(b -> period.equals(b.getPeriod()))
-                .map(Bill::getTotalAmount)
+        List<Meter> meters = accessPolicy.visibleMeters(user);
+        Set<String> meterIds = meters.stream().map(Meter::getMeterId).collect(Collectors.toSet());
+        List<Reading> readings = readingRepository.findAll().stream()
+                .filter(reading -> meterIds.contains(reading.getMeterId())).toList();
+        LocalDate today = LocalDate.now();
+        long reportedToday = readings.stream().filter(reading -> reading.getTs() != null
+                        && reading.getTs().toLocalDate().equals(today) && !reading.getTs().isAfter(java.time.LocalDateTime.now()))
+                .map(Reading::getMeterId).distinct().count();
+        int coverage = meters.isEmpty() ? 0 : (int) (reportedToday * 100 / meters.size());
+        String period = YearMonth.now().toString();
+        List<BillItem> bills = billItemRepository.findAll().stream()
+                .filter(item -> meterIds.contains(item.getMeterId()) && period.equals(item.getPeriod())).toList();
+        BigDecimal receivable = bills.stream().map(BillService::currentTotalDue).filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        long pending = anomalyRepository.countByStatus(DomainEnums.AnomalyStatus.待处理);
-        long highRisk = anomalyRepository.countByLevel(DomainEnums.RiskLevel.高);
-
+        List<Anomaly> anomalies = anomalyRepository.findAll().stream()
+                .filter(anomaly -> meterIds.contains(anomaly.getMeterId())).toList();
+        long pending = anomalies.stream().filter(anomaly -> anomaly.getStatus() == DomainEnums.AnomalyStatus.待处理).count();
+        long highRisk = anomalies.stream().filter(anomaly -> anomaly.getLevel() == DomainEnums.RiskLevel.高
+                && anomaly.getStatus() != DomainEnums.AnomalyStatus.已完成).count();
         List<DashboardData.StatCard> stats = List.of(
-                new DashboardData.StatCard("水表总数", String.valueOf(totalMeters),
-                        "已纳入台账", "cyan"),
-                new DashboardData.StatCard("今日抄表率", coverage + "%",
-                        "近 24 小时上报占比", "green"),
-                new DashboardData.StatCard("本月应收", "¥" + receivable.setScale(2, RoundingMode.HALF_UP).toPlainString(),
-                        "按已生成账单统计", "blue"),
-                new DashboardData.StatCard("待处理异常", String.valueOf(pending),
-                        "高风险 " + highRisk + " 条", "orange"));
-
-        // 近 7 日用水量（按上报的瞬时流量按天聚合，单位为 m³）
-        LocalDateTime from = LocalDate.now().minusDays(6).atStartOfDay();
-        List<Reading> readings = readingRepository.findByTsBetween(from, LocalDateTime.now());
-        Map<LocalDate, BigDecimal> daily = new TreeMap<>();
-        for (Reading r : readings) {
-            if (r.getInstantFlow() != null) {
-                daily.merge(r.getTs().toLocalDate(), r.getInstantFlow(), BigDecimal::add);
-            }
-        }
+                new DashboardData.StatCard("水表总数", String.valueOf(meters.size()), "当前账号可访问范围", "cyan"),
+                new DashboardData.StatCard("今日抄表率", coverage + "%", "今日已上报水表去重占比", "green"),
+                new DashboardData.StatCard("本月应收", "¥" + receivable.setScale(2, RoundingMode.HALF_UP).toPlainString(), "范围内账单明细汇总", "blue"),
+                new DashboardData.StatCard("待处理异常", String.valueOf(pending), "未完成高风险 " + highRisk + " 条", "orange"));
+        Map<LocalDate, BigDecimal> daily = UsageAnalytics.dailyUsage(readings, meterIds, today.minusDays(6), today);
         List<BigDecimal> trend = new ArrayList<>();
-        for (int i = 6; i >= 0; i--) {
-            trend.add(daily.getOrDefault(LocalDate.now().minusDays(i), BigDecimal.ZERO)
-                    .setScale(0, RoundingMode.HALF_UP));
+        for (int days = 6; days >= 0; days--) {
+            trend.add(daily.getOrDefault(today.minusDays(days), BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP));
         }
-
-        // 本月用水结构（按用户类型台数）
-        List<DashboardData.Category> categories = List.of(
-                new DashboardData.Category("居民", BigDecimal.valueOf(meterRepository.countByType(DomainEnums.MeterType.居民))),
-                new DashboardData.Category("商业", BigDecimal.valueOf(meterRepository.countByType(DomainEnums.MeterType.商业))),
-                new DashboardData.Category("工业", BigDecimal.valueOf(meterRepository.countByType(DomainEnums.MeterType.工业))));
-
+        List<DashboardData.Category> categories = new ArrayList<>();
+        for (DomainEnums.MeterType type : DomainEnums.MeterType.values()) {
+            BigDecimal usage = meters.stream().filter(meter -> meter.getType() == type)
+                    .map(meter -> currentUsage(meter, bills)).reduce(BigDecimal.ZERO, BigDecimal::add);
+            categories.add(new DashboardData.Category(type.name(), usage.setScale(2, RoundingMode.HALF_UP)));
+        }
         return new DashboardData(stats, trend, categories);
+    }
+
+    private BigDecimal currentUsage(Meter meter, List<BillItem> bills) {
+        return bills.stream().filter(item -> meter.getMeterId().equals(item.getMeterId())).map(BillItem::getUsage)
+                .filter(Objects::nonNull).findFirst().orElseGet(() -> meter.getReading() == null || meter.getLastReading() == null
+                        ? BigDecimal.ZERO : meter.getReading().subtract(meter.getLastReading()).max(BigDecimal.ZERO));
     }
 }

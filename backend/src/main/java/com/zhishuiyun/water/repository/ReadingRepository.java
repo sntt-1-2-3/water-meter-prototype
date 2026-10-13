@@ -10,6 +10,8 @@ import java.util.Optional;
 public interface ReadingRepository extends JpaRepository<Reading, Long> {
 
     Optional<Reading> findFirstByMeterIdOrderByTsDesc(String meterId);
+    Optional<Reading> findFirstByMeterIdAndTsBeforeOrderByTsDesc(String meterId, LocalDateTime ts);
+    List<Reading> findTop3ByMeterIdOrderByTsDesc(String meterId);
 
     List<Reading> findByMeterIdAndTsBetweenOrderByTsAsc(String meterId, LocalDateTime from, LocalDateTime to);
 

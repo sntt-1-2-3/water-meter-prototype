@@ -1,28 +1,36 @@
 import { apiClient } from './client'
-import type { Anomaly, BillBatch, Meter, ReadingTask, StatCard } from '../types/domain'
-
-export interface DashboardData {
-  stats: StatCard[]
-  trend: number[]
-  categories: Array<{ name: string; value: number }>
-}
-
-export interface PageResult<T> {
-  items: T[]
-  total: number
-  page: number
-  pageSize: number
-}
+import type { Anomaly, BillBatch, BillItem, DashboardData, Feedback, LoginResponse, Meter, MeterRequest, PageResult, Payment, PriceRule, ReadingTask, RegistrationPayload, SystemNotification, UserSession, UserSummary } from '../types/domain'
 
 export const waterApi = {
+  login: (username: string, password: string) => apiClient.post<LoginResponse>('/auth/login', { username, password }),
+  register: (payload: RegistrationPayload) => apiClient.post<LoginResponse>('/auth/register', payload),
+  me: () => apiClient.get<UserSession>('/auth/me'),
+  getUserSummary: () => apiClient.get<UserSummary>('/user/summary'),
+  getAccounts: () => apiClient.get<UserSession[]>('/accounts'),
+  bindAccount: (id: number, boundMeterId: string | null) => apiClient.patch<UserSession>('/accounts/' + id + '/binding', { boundMeterId }),
+  getNotifications: () => apiClient.get<SystemNotification[]>('/notifications'),
+  getNotification: (id: number) => apiClient.get<SystemNotification>('/notifications/' + id),
+  readNotification: (id: number) => apiClient.patch('/notifications/' + id + '/read'),
+  readAllNotifications: () => apiClient.post('/notifications/read-all'),
+  getFeedback: () => apiClient.get<Feedback[]>('/feedback'),
+  createFeedback: (type: string, description: string) => apiClient.post<Feedback>('/feedback', { type, description }),
+  updateFeedback: (id: number, status: Anomaly['status'], resolution: string) => apiClient.patch<Feedback>('/feedback/' + id, { status, resolution }),
   getDashboard: () => apiClient.get<DashboardData>('/dashboard'),
   getMeters: (params: { page: number; pageSize: number; keyword?: string; type?: string }) => apiClient.get<PageResult<Meter>>('/meters', { params }),
-  createMeter: (meter: Meter) => apiClient.post<Meter>('/meters', meter),
-  updateMeter: (id: string, meter: Meter) => apiClient.put<Meter>(`/meters/${id}`, meter),
-  startReading: () => apiClient.post<ReadingTask>('/readings/tasks'),
+  createMeter: (meter: MeterRequest) => apiClient.post<Meter>('/meters', meter),
+  updateMeter: (id: string, meter: MeterRequest) => apiClient.put<Meter>('/meters/' + encodeURIComponent(id), meter),
+  startReading: (simulateFailure = false) => apiClient.post<ReadingTask>('/readings/tasks', { simulateFailure }),
   getReadingTasks: () => apiClient.get<ReadingTask[]>('/readings/tasks'),
+  getScheduler: () => apiClient.get<{ enabled: boolean; intervalSeconds: number }>('/readings/scheduler'),
+  updateScheduler: (enabled: boolean) => apiClient.patch<{ enabled: boolean; intervalSeconds: number }>('/readings/scheduler', { enabled }),
+  retryReading: (id: number) => apiClient.post<ReadingTask>('/readings/tasks/' + id + '/retry'),
   getBills: () => apiClient.get<BillBatch[]>('/bills'),
-  recalculateBills: () => apiClient.post('/bills/recalculate'),
-  getAnomalies: () => apiClient.get<Anomaly[]>('/anomalies'),
-  updateAnomaly: (id: string, status: Anomaly['status']) => apiClient.patch<Anomaly>(`/anomalies/${id}`, { status }),
+  getBillItems: (batch?: string, period?: string) => apiClient.get<BillItem[]>('/bills/items', { params: { batch, period } }),
+  getPayments: () => apiClient.get<Payment[]>('/bills/payments'),
+  payBill: (id: number, idempotencyKey: string) => apiClient.post<Payment>('/bills/items/' + id + '/pay', { idempotencyKey }),
+  recalculateBills: (period?: string, dueDate?: string) => apiClient.post<BillBatch[]>('/bills/recalculate', { period, dueDate }),
+  getPriceRules: () => apiClient.get<PriceRule[]>('/bills/rules'),
+  getAnomalies: (level?: string) => apiClient.get<Anomaly[]>('/anomalies', { params: level ? { level } : undefined }),
+  updateAnomaly: (id: string, status: Anomaly['status']) => apiClient.patch<Anomaly>('/anomalies/' + encodeURIComponent(id), { status }),
+  detectAnomalies: (meterId: string, scenario: string) => apiClient.post('/readings/simulate', { meterId, scenario }),
 }

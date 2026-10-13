@@ -14,7 +14,11 @@ public record AnomalyDto(
         String type,
         String level,
         String time,
-        String status) {
+        String status,
+        String alarmCode,
+        String suggestion,
+        String confirmedBy,
+        java.time.LocalDateTime confirmedAt) {
 
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
@@ -26,6 +30,7 @@ public record AnomalyDto(
                 a.getType(),
                 a.getLevel() != null ? a.getLevel().name() : null,
                 a.getTime() != null ? a.getTime().format(FMT) : null,
-                a.getStatus() != null ? a.getStatus().name() : null);
+                a.getStatus() != null ? a.getStatus().name() : null,
+                a.getAlarmCode(), a.getSuggestion(), a.getConfirmedBy(), a.getConfirmedAt());
     }
 }

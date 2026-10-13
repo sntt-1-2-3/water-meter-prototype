@@ -11,6 +11,8 @@ import 'element-plus/dist/index.css'
 import './style.css'
 import App from './App.vue'
 import router from './router'
+import { useSystemStore } from './stores/system'
+import { authExpiredEvent } from './utils/session'
 
 const app = createApp(App)
 
@@ -24,7 +26,12 @@ const elementComponents = [
 
 elementComponents.forEach((component) => app.component(component.name!, component))
 
+const pinia = createPinia()
+app.use(pinia)
+window.addEventListener(authExpiredEvent, () => {
+  useSystemStore(pinia).logout()
+  if (router.currentRoute.value.path !== '/login') void router.replace('/login')
+})
 app
-  .use(createPinia())
   .use(router)
   .mount('#app')
