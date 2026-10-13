@@ -1,5 +1,6 @@
 package com.zhishuiyun.water.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -22,16 +23,20 @@ public class Account {
 
     /** BCrypt 哈希，禁止明文 */
     @Column(nullable = false)
+    @JsonIgnore
     private String password;
 
     /** 姓名 / 名称 */
     private String name;
 
+    /** 联系电话，仅本人和管理员可见。 */
+    private String phone;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private DomainEnums.AccountRole role;
 
-    /** 数据范围：运营人员限定的区域，null 表示全部 */
+    /** 运营人员限定的区域；运营人员为空时无辖区权限。 */
     private String areaScope;
 
     /** 普通用户绑定的水表编号 */

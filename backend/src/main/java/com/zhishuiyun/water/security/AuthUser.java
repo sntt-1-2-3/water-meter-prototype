@@ -16,7 +16,7 @@ public class AuthUser {
     private final String username;
     private final String name;
     private final DomainEnums.AccountRole role;
-    /** 运营人员限定的区域，null 表示全部 */
+    /** 运营人员限定的区域；为空时无辖区权限。 */
     private final String areaScope;
     /** 普通用户绑定的水表编号 */
     private final String boundMeterId;
@@ -35,10 +35,12 @@ public class AuthUser {
 
     /** 判断某区域是否在当前用户数据范围内（areaScope 支持逗号分隔多区域） */
     public boolean canAccessArea(String area) {
-        if (areaScope == null) {
+        if (role == DomainEnums.AccountRole.ADMIN || role == DomainEnums.AccountRole.FINANCE
+                || role == DomainEnums.AccountRole.AUDITOR) {
             return true;
         }
-        if (area == null) {
+        // 普通用户必须按绑定的具体水表判断，不能把空 areaScope 当作全区域权限。
+        if (role != DomainEnums.AccountRole.OPERATOR || areaScope == null || areaScope.isBlank() || area == null) {
             return false;
         }
         for (String a : areaScope.split(",")) {
@@ -51,6 +53,9 @@ public class AuthUser {
 
     /** 数据范围内的区域列表，逗号分隔；null 表示全部。 */
     public java.util.List<String> areaList() {
+        if (role == DomainEnums.AccountRole.OPERATOR && (areaScope == null || areaScope.isBlank())) {
+            return java.util.List.of();
+        }
         if (areaScope == null || areaScope.isBlank()) {
             return null;
         }

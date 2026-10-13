@@ -26,5 +26,9 @@ dist-ssr
 
 # Local AI tool directories
 .reasonix/
+reasonix.toml
 .claude/
 .openai/
+.env
+.env.*
+!.env.example

@@ -44,7 +44,11 @@ public class BillingService {
     /**
      * 阶梯累加，返回未舍入的精确水费。
      */
-    private BigDecimal waterFeeRaw(BigDecimal usage, List<PriceRule> rules) {
+    public BigDecimal waterFeeRaw(BigDecimal usage, List<PriceRule> rules) {
+        if (usage == null || usage.signum() < 0 || rules == null || rules.isEmpty()) {
+            throw new com.zhishuiyun.water.common.BusinessException(
+                    com.zhishuiyun.water.common.ErrorCode.BILL_NOT_READY);
+        }
         BigDecimal remaining = usage;
         BigDecimal fee = BigDecimal.ZERO;
         for (PriceRule rule : rules) {

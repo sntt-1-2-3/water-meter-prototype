@@ -5,6 +5,7 @@ import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 
 /**
  * 账单明细，一行一户一账期，是计费与缴费幂等的核心单元。
@@ -62,4 +63,11 @@ public class BillItem {
     private DomainEnums.BillStatus status;
 
     private LocalDateTime paidAt;
+
+    /** Immutable billing-period meter snapshots. */
+    private BigDecimal openingReading;
+    private BigDecimal closingReading;
+    private BigDecimal rawWaterFee;
+    private BigDecimal penaltyRate;
+    private LocalDate dueDate;
 }

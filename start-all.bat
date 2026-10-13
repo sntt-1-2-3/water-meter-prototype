@@ -1,5 +1,6 @@
 @echo off
 cd /d "%~dp0"
+set "VITE_USE_REAL_API=true"
 
 echo Starting backend and frontend in two windows...
 start "water-backend" cmd /k ""%~dp0start-backend.bat""

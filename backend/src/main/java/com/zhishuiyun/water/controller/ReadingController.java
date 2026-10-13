@@ -20,14 +20,39 @@ public class ReadingController {
     private final ReportService reportService;
 
     @PostMapping("/tasks")
-    public ApiResponse<ReadingTaskDto> start() {
-        return ApiResponse.ok(readingService.startReading(CurrentUser.required()));
+    public ApiResponse<ReadingTaskDto> start(@RequestBody(required = false) TaskRequest request) {
+        return ApiResponse.ok(readingService.startReading(CurrentUser.required(), request != null && Boolean.TRUE.equals(request.simulateFailure())));
     }
 
     @GetMapping("/tasks")
     public ApiResponse<List<ReadingTaskDto>> tasks() {
-        return ApiResponse.ok(readingService.listTasks());
+        return ApiResponse.ok(readingService.listTasks(CurrentUser.required()));
     }
+
+    @PostMapping("/tasks/{id}/retry")
+    public ApiResponse<ReadingTaskDto> retry(@PathVariable Long id) {
+        return ApiResponse.ok(readingService.retry(id, CurrentUser.required()));
+    }
+
+    @PostMapping("/simulate")
+    public ApiResponse<Void> simulate(@RequestBody SimulationRequest request) {
+        readingService.simulate(request.meterId(), request.scenario(), CurrentUser.required());
+        return ApiResponse.ok();
+    }
+
+    @GetMapping("/scheduler")
+    public ApiResponse<ReadingService.SchedulerState> scheduler() {
+        return ApiResponse.ok(readingService.scheduler(CurrentUser.required()));
+    }
+
+    @PatchMapping("/scheduler")
+    public ApiResponse<ReadingService.SchedulerState> scheduler(@RequestBody SchedulerRequest request) {
+        return ApiResponse.ok(readingService.setScheduler(Boolean.TRUE.equals(request.enabled()), CurrentUser.required()));
+    }
+
+    public record TaskRequest(Boolean simulateFailure) {}
+    public record SimulationRequest(String meterId, String scenario) {}
+    public record SchedulerRequest(Boolean enabled) {}
 
     /** 原始上报数据入库（DQ 校验）。 */
     @PostMapping

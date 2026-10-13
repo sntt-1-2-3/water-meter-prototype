@@ -1,3 +1,7 @@
+.muted { color: #7d9197; font-size: 12px; line-height: 1.65; }
+.section-gap { margin-top: 18px; }
+.test-option { display: block; margin-bottom: 12px; color: #fff; font-size: 12px; }
+.request-error { overflow-wrap: anywhere; }
 :root {
   font-family: Inter, "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
   color: #1d3038;

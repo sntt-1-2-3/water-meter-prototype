@@ -1,4 +1,5 @@
 server:
+  address: ${SERVER_ADDRESS:127.0.0.1}
   port: 8000
 
 spring:
@@ -7,9 +8,13 @@ spring:
   datasource:
     url: jdbc:sqlite:${SQLITE_PATH:./water.db}
     driver-class-name: org.sqlite.JDBC
+    hikari:
+      # SQLite serializes writers; use one shared connection for this local prototype.
+      maximum-pool-size: 1
+      connection-timeout: 30000
   jpa:
     hibernate:
-      # 首次用 create 建表，稳定后改为 none 并走 db/schema.sql
+      # Preserve existing demo data and add new schema columns/tables on startup.
       ddl-auto: update
     database-platform: org.hibernate.community.dialect.SQLiteDialect
     open-in-view: false
@@ -27,10 +32,16 @@ spring:
       mode: never
 
 jwt:
-  # 测试环境密钥，生产必须通过环境变量覆盖
-  secret: ${JWT_SECRET:change-me-in-prod-please-use-a-long-random-string-0123456789}
+  # If unset, a random local key is persisted in an ignored file. Never commit it.
+  secret: ${JWT_SECRET:}
+  secret-file: ${JWT_SECRET_FILE:./.jwt-secret}
   # 有效期（分钟）
   expire-minutes: ${JWT_EXPIRE_MINUTES:480}
+
+simulator:
+  # Enable from the ADMIN reading page, or opt in at startup. No real hardware involved.
+  enabled: ${SIMULATOR_ENABLED:false}
+  interval-seconds: ${SIMULATOR_INTERVAL_SECONDS:60}
 
 deepseek:
   # 启用后 AI 助手改用 DeepSeek 处理数据（官方 API 或免费网关），未启用则回退本地规则引擎
