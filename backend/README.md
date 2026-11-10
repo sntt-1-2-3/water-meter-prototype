@@ -77,7 +77,7 @@ JWT 仅证明会话，过滤器每次从数据库重新读取账号启用状态�
 | GET / PATCH | `/api/readings/scheduler` | ADMIN 查询/设置 enabled |
 | POST | `/api/readings/simulate` | ADMIN，meterId + normal/high_flow/alarm/offline |
 | GET | `/api/bills`、`/api/bills/items` | 范围内账单批次/明细；明细可按 batch、period 过滤 |
-| POST | `/api/bills/recalculate` | ADMIN/FINANCE 生成快照，可传 period、dueDate |
+| POST | `/api/bills/recalculate` | ADMIN/FINANCE 生成快照，可传 period、dueDate；可选 meterId 仅生成指定水表，省略时按授权范围生成 |
 | GET | `/api/bills/rules`、`/api/bills/payments` | 价格规则/范围内付款流水 |
 | POST | `/api/bills/items/{id}/pay` | 本人 USER 或 ADMIN/FINANCE，提交 idempotencyKey |
 | GET / PATCH | `/api/anomalies` / `/api/anomalies/{id}` | 范围内异常列表/状态更新；用户仅本人只读 |
@@ -138,6 +138,14 @@ AI 默认本地规则：按当前角色/绑定/辖区读取真实水表、账单
 共享源码时，数据库、密钥、环境私密配置和备份不应提交；队友应在自己的电脑上生成演示数据库和本机 JWT 密钥。
 
 ## 测试与已知边界
+
+### 照片识别抄表（新增）
+
+`/api/readings/photos` 提供上传识别、受保护图片、草稿列表/详情、旋转框选重识别及人工确认接口，仅 ADMIN / OPERATOR 可按水表辖区使用。照片为私有数据库 BLOB，草稿不写业务读数；确认使用 BigDecimal 校验与并发基线检查，持久化 `Reading.source=PHOTO` 和照片关联，再供既有账期计费使用。照片不能提供的瞬时流量、水温、阀门及报警字段保持空值，不伪造遥测。
+
+OCR 依赖锁定 Tess4J 5.19.0：本机 Windows / Java 21 在 5.20.0 遇到与 [官方问题 #286](https://github.com/nguyenq/tess4j/issues/286) 一致的原生库初始化错误，已回退并实际运行 OCR。默认使用依赖中附带的 English 字符模型，仅提取可见数字，不是专用水表识别模型。机械半转数字、小数位及多候选必须人工核对。
+
+新增照片业务集成测试 11 项；`mvn.cmd test -Dphoto.ocr.native=true` 开启真实原生引擎测试，共 107 项。未加该开关时两个 native smoke 用例按环境条件跳过，不能把跳过当成 OCR 已验证。完整操作和边界见根目录 `docs/照片识别抄表使用说明.md`。
 
 ~~~powershell
 # 在 backend 目录

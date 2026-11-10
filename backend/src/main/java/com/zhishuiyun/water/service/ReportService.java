@@ -164,6 +164,7 @@ public class ReportService {
         if (latest != null && latest.getCumulativeFlow() != null) baseline = baseline.max(latest.getCumulativeFlow());
         BigDecimal cumulative = baseline.add(flow.max(BigDecimal.ONE)).setScale(3, java.math.RoundingMode.HALF_UP);
         Reading reading = Reading.builder().meterId(meterId).ts(ts).instantFlow(flow).cumulativeFlow(cumulative)
+                .source("SIMULATED")
                 .temperature(new BigDecimal("22.5")).valve(DomainEnums.ValveStatus.开启)
                 .alarmCode("alarm".equals(scenario) ? "E01" : "0").build();
         readingRepository.save(reading);

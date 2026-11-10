@@ -9,6 +9,7 @@ const router = createRouter({
   routes: [
     { path: '/login', name: 'login', component: () => import('../views/auth/LoginView.vue'), meta: { guestOnly: true } },
     { path: '/register', name: 'register', component: () => import('../views/auth/RegisterView.vue'), meta: { guestOnly: true } },
+    { path: '/pay/:id', name: 'payment-confirm', component: () => import('../views/user/PaymentConfirmView.vue'), meta: { requiresAuth: true, roles: ['USER', 'ADMIN', 'FINANCE'] } },
     {
       path: '/', component: () => import('../layouts/SystemLayout.vue'), meta: { requiresAuth: true },
       children: [
@@ -37,7 +38,10 @@ router.beforeEach(async (to) => {
     return true
   }
   if (!store.sessionReady) {
-    try { await store.refreshSession() } catch { store.logout(); return to.name === 'login' ? true : { name: 'login' } }
+    try { await store.refreshSession() } catch {
+      store.logout()
+      return to.name === 'login' ? true : { name: 'login', query: /^\/pay\/[1-9]\d*$/.test(to.path) ? { redirect: to.path } : {} }
+    }
   }
   if (to.meta.guestOnly) return homeFor(store.role)
   const requiredRoles = to.meta.roles as Role[] | undefined

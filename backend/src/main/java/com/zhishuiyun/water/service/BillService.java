@@ -36,6 +36,11 @@ public class BillService {
 
     /** Each meter/period is generated once. Existing snapshots (including paid items) remain immutable. */
     public List<BillBatchDto> recalculate(AuthUser user, String requestedPeriod, LocalDate dueDate) {
+        return recalculate(user, requestedPeriod, dueDate, null);
+    }
+
+    /** Optional single-meter scope supports preparing one account without billing unrelated households. */
+    public List<BillBatchDto> recalculate(AuthUser user, String requestedPeriod, LocalDate dueDate, String meterId) {
         accessPolicy.requireBilling(user);
         YearMonth month;
         try { month = requestedPeriod == null || requestedPeriod.isBlank()
@@ -46,7 +51,10 @@ public class BillService {
         LocalDate deadline = dueDate == null ? month.atEndOfMonth().plusDays(15) : dueDate;
         if (deadline.isBefore(month.atDay(1))) throw new BusinessException(ErrorCode.BAD_REQUEST, "缴费截止日期不能早于账期");
         int created = 0;
-        for (Meter meter : meterRepository.findAll()) {
+        List<Meter> selected = meterId == null || meterId.isBlank() ? meterRepository.findAll()
+                : List.of(meterRepository.findByMeterId(meterId).orElseThrow(() -> new BusinessException(ErrorCode.METER_NOT_FOUND)));
+        for (Meter meter : selected) {
+            accessPolicy.requireAccessMeter(user, meter);
             if (billItemRepository.findFirstByMeterIdAndPeriod(meter.getMeterId(), period).isPresent()) continue;
             // Inserting an older period after a later snapshot would double-count usage.
             List<BillItem> previous = billItemRepository.findByMeterIdOrderByIdDesc(meter.getMeterId());
@@ -100,6 +108,13 @@ public class BillService {
         return items.stream().filter(i -> batch == null || batch.isBlank() || batch.equals(i.getBatchNo()))
                 .filter(i -> period == null || period.isBlank() || period.equals(i.getPeriod()))
                 .sorted(Comparator.comparing(BillItem::getId).reversed()).map(BillItemDto::from).toList();
+    }
+
+    public BillItemDto item(AuthUser user, Long id) {
+        BillItem item = billItemRepository.findById(id).orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+        if (!accessPolicy.canAccessMeterId(user, item.getMeterId())) throw new BusinessException(ErrorCode.FORBIDDEN);
+        refresh(item);
+        return BillItemDto.from(item);
     }
 
     public List<BillBatchDto> listBills(AuthUser user) {

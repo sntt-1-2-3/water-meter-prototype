@@ -28,7 +28,8 @@ public class BillingController {
     @PostMapping("/recalculate")
     public ApiResponse<List<BillBatchDto>> recalculate(@RequestBody(required = false) GenerateRequest request) {
         return ApiResponse.ok(billService.recalculate(CurrentUser.required(),
-                request == null ? null : request.period(), request == null ? null : request.dueDate()));
+                request == null ? null : request.period(), request == null ? null : request.dueDate(),
+                request == null ? null : request.meterId()));
     }
 
     @GetMapping("/items")
@@ -42,6 +43,11 @@ public class BillingController {
         return ApiResponse.ok(billService.payments(CurrentUser.required()));
     }
 
+    @GetMapping("/items/{id}")
+    public ApiResponse<BillItemDto> item(@PathVariable Long id) {
+        return ApiResponse.ok(billService.item(CurrentUser.required(), id));
+    }
+
     @PostMapping("/items/{id}/pay")
     public ApiResponse<PaymentDto> pay(@PathVariable Long id, @RequestBody PayRequest request) {
         return ApiResponse.ok(billService.pay(id, request.idempotencyKey(), CurrentUser.required()));
@@ -53,6 +59,6 @@ public class BillingController {
         return ApiResponse.ok(billService.rules());
     }
 
-    public record GenerateRequest(String period, LocalDate dueDate) {}
+    public record GenerateRequest(String period, LocalDate dueDate, String meterId) {}
     public record PayRequest(String idempotencyKey) {}
 }

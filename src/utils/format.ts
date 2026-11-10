@@ -9,6 +9,10 @@ export function dateTime(value?: string | null) { return value ? value.replace('
 export function paymentKey(id: number) {
   const key = 'water-payment-key-' + id
   let value = sessionStorage.getItem(key)
-  if (!value) { value = crypto.randomUUID(); sessionStorage.setItem(key, value) }
+  if (!value) {
+    value = typeof crypto.randomUUID === 'function' ? crypto.randomUUID()
+      : Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join('')
+    sessionStorage.setItem(key, value)
+  }
   return value
 }

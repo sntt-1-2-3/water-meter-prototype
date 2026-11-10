@@ -16,7 +16,8 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Entity
 @Table(name = "reading",
-        indexes = {@Index(columnList = "meterId"), @Index(columnList = "ts")})
+        indexes = {@Index(columnList = "meterId"), @Index(columnList = "ts"),
+                @Index(name = "uk_reading_photo", columnList = "photoReadingId", unique = true)})
 public class Reading {
 
     @Id
@@ -35,6 +36,7 @@ public class Reading {
     private BigDecimal instantFlow;
 
     /** 累计流量 m³ */
+    @Column(precision = 12, scale = 3)
     private BigDecimal cumulativeFlow;
 
     /** 水温 ℃ */
@@ -46,4 +48,17 @@ public class Reading {
     /** 报警码，0 表示正常 */
     @Column(length = 16)
     private String alarmCode;
+
+    /** DEVICE / SIMULATED / PHOTO. Old rows with no source remain device readings. */
+    @Builder.Default
+    @Column(length = 16)
+    private String source = "DEVICE";
+
+    /** Links a confirmed photograph without exposing the private photograph bytes. */
+    @Column
+    private Long photoReadingId;
+
+    public String getSource() {
+        return source == null || source.isBlank() ? "DEVICE" : source;
+    }
 }

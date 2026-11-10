@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { Lock, User } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import BrandMark from '../../components/BrandMark.vue'
@@ -8,6 +8,7 @@ import { useSystemStore } from '../../stores/system'
 import { homeFor } from '../../utils/permissions'
 import { errorMessage } from '../../utils/format'
 const router = useRouter()
+const route = useRoute()
 const store = useSystemStore()
 const loading = ref(false)
 const form = reactive({ username: '', password: '' })
@@ -20,7 +21,8 @@ async function submit() {
     const user = await store.login(form.username, form.password)
     form.password = ''
     ElMessage.success('欢迎回来，' + user.name)
-    await router.replace(homeFor(user.role))
+    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : ''
+    await router.replace(/^\/pay\/[1-9]\d*$/.test(redirect) ? redirect : homeFor(user.role))
   } catch (error) { ElMessage.error(errorMessage(error)) } finally { loading.value = false }
 }
 </script>

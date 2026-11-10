@@ -7,6 +7,7 @@ import { useSystemStore } from '../../stores/system'
 import { downloadCsv } from '../../utils/export'
 import { dateTime, errorMessage } from '../../utils/format'
 import RequestState from '../../components/RequestState.vue'
+import PhotoReadingPanel from '../../components/PhotoReadingPanel.vue'
 import { waterApi } from '../../api/water'
 const store = useSystemStore()
 const { readingProgress, readingRunning, tasks, canOperate } = storeToRefs(store)
@@ -35,7 +36,7 @@ async function reload(showLoading = true) {
 async function startTask() {
   if (saving.value || readingRunning.value) return
   saving.value = true
-  try { await store.startReading(simulateFailure.value); error.value = ''; schedulePoll(); ElMessage.success('抄表任务已提交') }
+  try { await store.startReading(simulateFailure.value); error.value = ''; schedulePoll(); ElMessage.success('模拟采集任务已提交') }
   catch (e) { ElMessage.error(errorMessage(e)) } finally { saving.value = false }
 }
 async function retryTask(id?: number) {
@@ -60,8 +61,9 @@ onBeforeUnmount(() => { active = false; if (poll) clearTimeout(poll) })
 </script>
 <template>
   <section class="workspace">
-    <section v-if="store.isAdmin" class="panel data-panel" style="margin-bottom:18px"><div class="panel-head"><div><h2>定时采集</h2><p>默认关闭。开启后由后端按照间隔启动采集任务，手动任务仍可独立执行。</p></div><el-tag :type="scheduler.enabled ? 'success' : 'info'">{{ scheduler.enabled ? '已开启' : '已关闭' }}</el-tag></div><div class="filter-row"><span>采集间隔：{{ scheduler.intervalSeconds }} 秒</span><el-button :type="scheduler.enabled ? 'danger' : 'primary'" :loading="schedulerSaving" :disabled="loading || Boolean(error)" @click="saveScheduler(!scheduler.enabled)">{{ scheduler.enabled ? '关闭定时采集' : '开启定时采集' }}</el-button></div></section>
-    <div class="reading-hero"><div><span class="eyebrow">采集任务</span><h2>自动抄表与失败补采</h2><p>根据当前账号的区域权限采集，进度和结果由后端保存。</p></div><div v-if="canOperate"><label class="test-option"><input v-model="simulateFailure" type="checkbox" :disabled="readingRunning || saving"> 模拟一次采集失败</label><el-button size="large" type="primary" :loading="saving || readingRunning" :icon="Operation" @click="startTask">{{ readingRunning ? '正在执行' : '启动抄表' }}</el-button></div></div>
+    <PhotoReadingPanel v-if="canOperate" @confirmed="reload(false)" />
+    <section v-if="store.isAdmin" class="panel data-panel" style="margin-bottom:18px"><div class="panel-head"><div><h2>定时模拟采集（演示）</h2><p>默认关闭。开启后由后端定时生成模拟数据；实际水表读数请使用上方照片抄表功能。</p></div><el-tag :type="scheduler.enabled ? 'success' : 'info'">{{ scheduler.enabled ? '已开启' : '已关闭' }}</el-tag></div><div class="filter-row"><span>采集间隔：{{ scheduler.intervalSeconds }} 秒</span><el-button :type="scheduler.enabled ? 'danger' : 'primary'" :loading="schedulerSaving" :disabled="loading || Boolean(error)" @click="saveScheduler(!scheduler.enabled)">{{ scheduler.enabled ? '关闭定时模拟采集' : '开启定时模拟采集' }}</el-button></div></section>
+    <div class="reading-hero"><div><span class="eyebrow">模拟采集（演示）</span><h2>模拟采集与失败补采</h2><p>由模拟器生成读数用于演示，不代表真实设备上报；进度和结果由后端保存。</p></div><div v-if="canOperate"><label class="test-option"><input v-model="simulateFailure" type="checkbox" :disabled="readingRunning || saving"> 模拟一次采集失败</label><el-button size="large" type="primary" :loading="saving || readingRunning" :icon="Operation" @click="startTask">{{ readingRunning ? '模拟采集中' : '启动模拟采集' }}</el-button></div></div>
     <div class="page-toolbar"><span class="muted">{{ readingRunning ? '每 1.5 秒刷新任务状态' : '任务记录来自后端' }}</span><el-button :loading="loading" @click="reload()">刷新记录</el-button></div>
     <RequestState :loading="loading" :error="error" @retry="reload()" />
     <div v-if="tasks.length" class="reading-progress panel"><div class="progress-number"><strong>{{ readingProgress }}%</strong><span>{{ tasks[0]?.success || 0 }} / {{ tasks[0]?.total || 0 }} 台 · {{ tasks[0]?.status }}</span></div><el-progress :percentage="readingProgress" :stroke-width="14" :show-text="false" /></div>

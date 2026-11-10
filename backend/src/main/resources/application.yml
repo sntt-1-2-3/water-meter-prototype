@@ -5,6 +5,10 @@ server:
 spring:
   application:
     name: water-meter-backend
+  servlet:
+    multipart:
+      max-file-size: 8MB
+      max-request-size: 9MB
   datasource:
     url: jdbc:sqlite:${SQLITE_PATH:./water.db}
     driver-class-name: org.sqlite.JDBC
