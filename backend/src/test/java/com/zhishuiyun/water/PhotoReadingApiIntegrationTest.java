@@ -98,6 +98,45 @@ class PhotoReadingApiIntegrationTest {
     }
 
     @Test
+    void deferredUploadPersistsOriginalBeforeOcrAndCanRecognizeLater() throws Exception {
+        AtomicInteger calls = new AtomicInteger();
+        when(ocr.recognize(any(BufferedImage.class))).thenAnswer(call -> {
+            calls.incrementAndGet();
+            return new PhotoOcrEngine.OcrResult("70.812", List.of("70.812"), 86.0, "TEST_OCR", null);
+        });
+        Meter meter = fixture("滨江花园");
+        JsonNode draft = upload(meter.getMeterId(), admin, image, 200, false).path("data");
+        assertThat(calls.get()).isZero();
+        assertThat(draft.path("status").asText()).isEqualTo("DRAFT");
+        assertThat(draft.path("recognizedAt").isNull()).isTrue();
+        assertThat(draft.path("suggestedReading").isNull()).isTrue();
+        assertThat(draft.path("candidates").isEmpty()).isTrue();
+        var original = mvc.perform(get(path(draft) + "/image").header("Authorization", "Bearer " + admin)).andReturn();
+        assertThat(original.getResponse().getStatus()).isEqualTo(200);
+        JsonNode recognized = json("POST", path(draft) + "/recognize", Map.of("rotation", 0), admin, 200).path("data");
+        assertThat(recognized.path("suggestedReading").asText()).isEqualTo("70.812");
+        assertThat(recognized.path("recognizedAt").isTextual()).isTrue();
+        assertThat(calls.get()).isEqualTo(1);
+        assertThat(count(meter)).isZero();
+    }
+
+    @Test
+    void savedPhotoCanBeManuallyConfirmedWithoutWaitingForOcr() throws Exception {
+        AtomicInteger calls = new AtomicInteger();
+        when(ocr.recognize(any(BufferedImage.class))).thenAnswer(call -> {
+            calls.incrementAndGet();
+            throw new IllegalStateException("Must not run for deferred upload or manual confirmation");
+        });
+        Meter meter = fixture("滨江花园");
+        JsonNode draft = upload(meter.getMeterId(), admin, image, 200, false).path("data");
+        JsonNode saved = json("POST", path(draft) + "/confirm", confirmation("71.5", "60"), admin, 200).path("data");
+        assertThat(saved.path("confirmedReading").asText()).isEqualTo("71.5");
+        assertThat(saved.path("manuallyEdited").asBoolean()).isTrue();
+        assertThat(calls.get()).isZero();
+        assertThat(count(meter)).isEqualTo(1);
+    }
+
+    @Test
     void uploadCreatesOnlyDraftAndAuthenticatedNormalizedPhoto() throws Exception {
         Meter meter = fixture("滨江花园");
         JsonNode draft = upload(meter.getMeterId(), admin, image, 200).path("data");
@@ -227,6 +266,26 @@ class PhotoReadingApiIntegrationTest {
     }
 
     @Test
+    void automaticWindowIsMappedBackToRotatedOriginalAndSurvivesReload() throws Exception {
+        Meter meter = fixture("滨江花园");
+        JsonNode draft = upload(meter.getMeterId(), admin, image, 200, false).path("data");
+        when(ocr.recognize(any(BufferedImage.class))).thenReturn(new PhotoOcrEngine.OcrResult(
+                "[自动定位数字窗口]\n00070812", List.of("70.812"), 80.0, "TEST_OCR", null,
+                new PhotoOcrEngine.Region(12, 30, 50, 90)));
+        json("POST", path(draft) + "/recognize", Map.of("rotation", 90, "crop", Map.of(
+                "x", 10, "y", 20, "width", 100, "height", 500)), admin, 200);
+        JsonNode reloaded = json("GET", path(draft), null, admin, 200).path("data");
+        assertThat(reloaded.path("rotation").asInt()).isEqualTo(90);
+        assertThat(reloaded.path("crop").path("x").asInt()).isEqualTo(22);
+        assertThat(reloaded.path("crop").path("y").asInt()).isEqualTo(50);
+        assertThat(reloaded.path("crop").path("width").asInt()).isEqualTo(50);
+        assertThat(reloaded.path("crop").path("height").asInt()).isEqualTo(90);
+        assertThat(reloaded.path("suggestedReading").asText()).isEqualTo("70.812");
+        assertThat(reloaded.path("imageWidth").asInt()).isEqualTo(600);
+        assertThat(count(meter)).isZero();
+    }
+
+    @Test
     void confirmedPhotoIsUsedForBillingAndExistingSnapshotIsNotOverwritten() throws Exception {
         Meter meter = fixture("滨江花园");
         JsonNode draft = upload(meter.getMeterId(), admin, image, 200).path("data");
@@ -255,7 +314,10 @@ class PhotoReadingApiIntegrationTest {
     private String path(JsonNode draft) { return "/api/readings/photos/" + draft.path("id").asText(); }
     private String login(String username) throws Exception { return json("POST", "/api/auth/login", Map.of("username", username, "password", "admin123"), null, 200).path("data").path("token").asText(); }
     private JsonNode upload(String meter, String token, byte[] bytes, int expected) throws Exception {
-        var builder = multipart("/api/readings/photos").file(new MockMultipartFile("file", "untrusted-name.png", "image/png", bytes)).param("meterId", meter);
+        return upload(meter, token, bytes, expected, true);
+    }
+    private JsonNode upload(String meter, String token, byte[] bytes, int expected, boolean recognize) throws Exception {
+        var builder = multipart("/api/readings/photos").file(new MockMultipartFile("file", "untrusted-name.png", "image/png", bytes)).param("meterId", meter).param("recognize", Boolean.toString(recognize));
         if (token != null) builder.header("Authorization", "Bearer " + token);
         MvcResult result = mvc.perform(builder).andReturn();
         JsonNode payload = mapper.readTree(result.getResponse().getContentAsString(StandardCharsets.UTF_8));

@@ -31,12 +31,12 @@ async function submit() {
   <main class="auth-page register-page">
     <section class="auth-visual">
       <div class="auth-brand"><BrandMark /><div><strong>智水云</strong><span>居民用水服务平台</span></div></div>
-      <div class="auth-hero-copy"><span>RESIDENT SERVICE</span><h1>随时了解用水<br>安心管理账单</h1><p>注册后由管理员绑定水表，即可查询个人账单、缴费记录与反馈结果。</p></div>
-      <div class="auth-feature-list"><span>仅查询本人绑定的水表</span><span>缴费记录可追溯</span><span>反馈处理结果及时通知</span></div>
+      <div class="auth-hero-copy"><h1>随时了解用水<br>安心管理账单</h1></div>
+      
     </section>
     <section class="auth-form-side">
       <div class="auth-card register-card">
-        <div class="auth-card-head"><span>居民注册</span><h2>创建居民用水账户</h2><p>管理人员账号由系统分配，注册账号默认为居民用户</p></div>
+        <div class="auth-card-head"><h2>创建居民用水账户</h2></div>
         <el-form label-position="top" @submit.prevent="submit">
           <div class="auth-form-grid">
             <el-form-item label="登录账号"><el-input v-model="form.username" autocomplete="username" maxlength="40" placeholder="3–40 位字母、数字或下划线" /></el-form-item>
@@ -46,7 +46,7 @@ async function submit() {
             <el-form-item label="确认密码" class="auth-grid-full"><el-input v-model="form.confirmPassword" type="password" autocomplete="new-password" show-password placeholder="请再次输入密码" @keyup.enter="submit" /></el-form-item>
           </div><el-button class="auth-submit" type="primary" size="large" :loading="loading" @click="submit">注册并进入用户端</el-button>
         </el-form><p class="auth-switch">已经有账号？<router-link to="/login">返回登录</router-link></p>
-      </div><p class="auth-footnote">密码由后端加密保存，不保存在浏览器账户列表中</p>
+      </div>
     </section>
   </main>
 </template>

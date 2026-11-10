@@ -45,17 +45,16 @@ onBeforeUnmount(() => { version++; stop() })
 <template>
   <el-dialog :model-value="modelValue" title="扫码缴费 · 模拟演示" width="min(460px, 94vw)" @update:model-value="emit('update:modelValue', $event)">
     <div class="qr-payment">
-      <el-alert title="此二维码不是微信/支付宝真实收款码，不会扣款。" type="warning" :closable="false" />
       <p v-if="error" role="alert">{{ error }}</p>
       <template v-if="bill">
         <h3>{{ bill.period }} 水费 · {{ bill.meterId }}</h3><strong class="qr-amount">{{ money(bill.outstanding) }}</strong>
-        <el-result v-if="bill.status === '已缴' || Number(bill.outstanding) <= 0" icon="success" title="账单已结清" sub-title="已从服务器确认，无需再次支付" />
+        <el-result v-if="bill.status === '已缴' || Number(bill.outstanding) <= 0" icon="success" title="账单已结清" />
         <template v-else>
           <img v-if="image" :src="image" alt="扫码打开账单确认页面（模拟支付）" width="280" height="280">
-          <p>扫码后登录本人账号，核对服务器最新金额并确认模拟支付。扫码本身不会记账。</p>
-          <el-alert v-if="url && isLoopbackUrl(url)" title="当前为本机地址，手机扫码无法访问。可在本机打开下方确认页；手机演示需部署地址并配置 VITE_PUBLIC_APP_URL。" type="info" :closable="false" />
+          
+          <el-alert v-if="url && isLoopbackUrl(url)" title="本机地址，手机无法访问" type="info" :closable="false" />
           <p v-if="url"><a :href="url" target="_blank" rel="noopener noreferrer">在浏览器打开支付确认页</a></p>
-          <small>此码只是账单入口，不锁定金额；本页每5秒查询支付状态。请勿对扫码软件进行真实转账。</small>
+          
         </template>
       </template>
       <p v-if="loading">正在查询账单…</p>
