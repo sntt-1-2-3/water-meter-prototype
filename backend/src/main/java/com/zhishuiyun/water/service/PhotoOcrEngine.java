@@ -24,12 +24,18 @@ import java.util.regex.Pattern;
 /** Real local Tesseract OCR. A proposal is never an authoritative billing reading. */
 @Component
 public class PhotoOcrEngine {
-    private static final String ENGINE = "Tesseract 5 / Tess4J 5.19.0 (local)";
+    private static final String ENGINE = "Tesseract 5 / Tess4J 5.19.0 + roller segmentation (local)";
     private static final Pattern NUMBER = Pattern.compile("(?<![\\p{L}\\d.,])\\d{1,12}(?:[.,]\\d{1,3})?(?![\\p{L}\\d.,])");
     private final Semaphore capacity = new Semaphore(1);
     private volatile Path dataPath;
 
-    public record OcrResult(String rawText, List<String> candidates, Double confidence, String engine, String error) {}
+    public record Region(int x, int y, int width, int height) {}
+    public record OcrResult(String rawText, List<String> candidates, Double confidence, String engine, String error,
+                            Region region) {
+        public OcrResult(String rawText, List<String> candidates, Double confidence, String engine, String error) {
+            this(rawText, candidates, confidence, engine, error, null);
+        }
+    }
 
     public OcrResult recognize(BufferedImage image) {
         if (image == null || image.getWidth() < 1 || image.getHeight() < 1
@@ -42,6 +48,10 @@ public class PhotoOcrEngine {
             engine.setLanguage("eng");
             engine.setOcrEngineMode(1);
             engine.setVariable("user_defined_dpi", "300");
+            engine.setVariable("load_system_dawg", "0");
+            engine.setVariable("load_freq_dawg", "0");
+            MeterDigitLocator.Window window = MeterDigitLocator.locate(image);
+            if (window != null) return readWindow(engine, image, window);
             boolean line = image.getWidth() >= image.getHeight() * 2L;
             // Restrict digits only for a user-cropped line; whole faces also contain model/serial numbers.
             if (line) engine.setVariable("tessedit_char_whitelist", "0123456789.,");
@@ -69,9 +79,11 @@ public class PhotoOcrEngine {
                     : Comparator.comparingDouble(Scored::score).reversed();
             proposals.stream().sorted(ordering)
                     .forEach(proposal -> unique.merge(proposal.value(), proposal.score(), Math::max));
-            List<String> values = unique.keySet().stream().limit(10).toList();
+            // Unlocated face text may be a model, serial, temperature or scale, never a proposed meter reading.
+            List<String> values = line ? unique.keySet().stream().limit(10).toList() : List.of();
             Double confidence = values.isEmpty() ? null : Math.max(0, Math.min(100, unique.get(values.get(0))));
-            String warning = values.isEmpty() ? "未识别出清晰数字；请框选数字窗口、旋转或人工填写"
+            String warning = !line ? "未能可靠定位数字窗口；整图文字可能包含型号或表号，请框选读数窗口后识别"
+                    : values.isEmpty() ? "未识别出清晰数字；请框选数字窗口、旋转或人工填写"
                     : values.size() > 1 ? "识别到多个数字，可能包含型号或表号；请框选读数窗口并核对小数位" : null;
             return new OcrResult(raw.substring(0, Math.min(16000, raw.length())), values, confidence, ENGINE, warning);
         } catch (Exception | LinkageError error) {
@@ -82,6 +94,48 @@ public class PhotoOcrEngine {
             if (error.getClass() != Error.class || !"Invalid memory access".equals(error.getMessage())) throw error;
             return failure("本地 OCR 原生库不兼容，请检查运行库版本，或根据原图人工填写后确认", "");
         } finally { capacity.release(); }
+    }
+
+    private OcrResult readWindow(Tesseract engine, BufferedImage image, MeterDigitLocator.Window window) {
+        engine.setVariable("tessedit_char_whitelist", "0123456789");
+        StringBuilder digits = new StringBuilder();
+        StringBuilder trace = new StringBuilder("[自动定位数字窗口]\n检测到 ")
+                .append(window.digits().size()).append(" 位滚轮，其中末尾 ")
+                .append(window.decimalPlaces()).append(" 位为红字。\n[逐位识别]\n");
+        double confidence = 0;
+        int scores = 0;
+        boolean complete = true;
+        for (MeterDigitLocator.Digit digit : window.digits()) {
+            if (Thread.currentThread().isInterrupted()) return failure("识别等待已结束，请重新框选或人工填写", trace.toString());
+            BufferedImage prepared = MeterDigitLocator.digitImage(image, digit, 120);
+            String agreed = null;
+            boolean consistent = true;
+            for (int mode : new int[]{8, 13}) {
+                engine.setPageSegMode(mode);
+                List<Word> words = engine.getWords(prepared, ITessAPI.TessPageIteratorLevel.RIL_WORD);
+                String text = words.stream().map(Word::getText).filter(java.util.Objects::nonNull)
+                        .reduce("", String::concat).replaceAll("\\s+", "");
+                if (!text.matches("[0-9]") || agreed != null && !agreed.equals(text)) consistent = false;
+                if (agreed == null) agreed = text;
+                if (words.size() == 1 && Float.isFinite(words.get(0).getConfidence())) {
+                    confidence += Math.max(0, Math.min(100, words.get(0).getConfidence())); scores++;
+                }
+            }
+            if (!consistent || agreed == null || agreed.isEmpty()) { complete = false; digits.append('?'); }
+            else digits.append(agreed);
+        }
+        trace.append(digits).append('\n');
+        var box = window.bounds();
+        Region region = new Region(box.x, box.y, box.width, box.height);
+        if (!complete) return new OcrResult(trace.toString(), List.of(), null, ENGINE,
+                "已定位数字窗口，但部分数字不清晰或识别结果不一致；请放大核对、重新框选或人工填写", region);
+        int split = digits.length() - window.decimalPlaces();
+        String proposed = digits.substring(0, split) + "." + digits.substring(split);
+        List<String> values = extractCandidates(proposed);
+        trace.append("[小数位建议]\n按检测到的黑字/红字分界建议 ").append(proposed)
+                .append(" m³。请人工核对红字位数、滚轮半转数字和表盘单位后确认。\n");
+        return new OcrResult(trace.toString(), values, scores == 0 ? null : confidence / scores, ENGINE,
+                values.isEmpty() ? "识别数值超过系统范围，请人工核对" : null, region);
     }
 
     private Path tessdata() throws Exception {

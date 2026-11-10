@@ -51,15 +51,15 @@ function logout() {
 <template>
   <main class="payment-page"><section class="payment-card">
     <h1>水费支付确认</h1><el-tag type="warning">模拟演示 · 非真实收款</el-tag>
-    <p>当前账号：{{ store.currentUser?.name }}。仅能查看或支付有权限的账单。</p>
+    <p>当前账号：{{ store.currentUser?.name }}</p>
     <el-alert v-if="error" :title="error" type="error" :closable="false" />
     <p v-if="loading">正在查询账单…</p>
     <template v-if="bill">
       <dl><dt>账期</dt><dd>{{ bill.period }}</dd><dt>水表</dt><dd>{{ bill.meterId }}</dd><dt>水费</dt><dd>{{ money(bill.waterFee) }}</dd><dt>违约金</dt><dd>{{ money(bill.penalty) }}</dd><dt>待缴金额</dt><dd><strong>{{ money(bill.outstanding) }}</strong></dd></dl>
-      <el-result v-if="settled" icon="success" title="账单已结清" :sub-title="receipt ? '模拟流水号：' + receipt : '服务器已确认，无需重复支付'" />
+      <el-result v-if="settled" icon="success" title="账单已结清" :sub-title="receipt ? '模拟流水号：' + receipt : ''" />
       <el-button v-else type="primary" size="large" :loading="paying" :disabled="loading" @click="pay">确认模拟支付 {{ money(bill.outstanding) }}</el-button>
     </template>
-    <p>扫描、刷新或关闭本页都不会自动支付。金额由后端账单计算，不接收二维码中的金额。提交期间若跨越日期造成金额变化，以后端最新应缴为准。</p>
+    
     <div class="payment-actions"><el-button :disabled="paying || loading" @click="reload">重新查询</el-button><router-link :to="homeFor(store.role)">返回工作台</router-link><el-button link :disabled="paying" @click="logout">退出并切换账号</el-button></div>
   </section></main>
 </template>

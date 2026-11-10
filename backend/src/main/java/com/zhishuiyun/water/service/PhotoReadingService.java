@@ -45,27 +45,32 @@ public class PhotoReadingService {
     private final BillItemRepository billItems;
     private final AccessPolicy access;
     private final AuditService audit;
-    private final PhotoOcrEngine ocr;
+    private final PhotoOcrRunner ocr;
     private final ObjectMapper mapper;
     private final TransactionTemplate transaction;
 
     public PhotoReadingService(PhotoReadingRepository photos, MeterRepository meters,
                                ReadingRepository readings, ReadingTaskRepository tasks,
                                BillItemRepository billItems, AccessPolicy access, AuditService audit,
-                               PhotoOcrEngine ocr, ObjectMapper mapper, PlatformTransactionManager transactions) {
+                               PhotoOcrRunner ocr, ObjectMapper mapper, PlatformTransactionManager transactions) {
         this.photos = photos; this.meters = meters; this.readings = readings; this.tasks = tasks;
         this.billItems = billItems; this.access = access; this.audit = audit;
         this.ocr = ocr; this.mapper = mapper; this.transaction = new TransactionTemplate(transactions);
     }
 
     public PhotoReadingDto upload(String meterId, MultipartFile file, AuthUser user) {
+        return upload(meterId, file, user, true);
+    }
+
+    public PhotoReadingDto upload(String meterId, MultipartFile file, AuthUser user, boolean autoRecognize) {
         access.requireReadings(user);
         inTransaction(() -> authorizedMeter(meterId, user));
         byte[] supplied = readUpload(file);
         BufferedImage image = decode(supplied);
         byte[] normalized = encodePng(image);
         // Native OCR and image decoding run with NO database connection/transaction held.
-        Recognition result = recognizeImage(image);
+        Recognition result = autoRecognize ? recognizeImage(image)
+                : new Recognition("", List.of(), null, "等待本地识别", null);
         return inTransaction(() -> {
             Meter meter = authorizedMeter(meterId, user);
             PhotoReading photo = PhotoReading.builder().meterId(meterId).status("DRAFT")
@@ -73,6 +78,7 @@ public class PhotoReadingService {
                     .imageBytes(normalized).imageWidth(image.getWidth()).imageHeight(image.getHeight())
                     .imageMime("image/png").rotation(0).manuallyEdited(false).build();
             applyRecognition(photo, result, 0, null);
+            if (!autoRecognize) photo.setRecognizedAt(null);
             photos.saveAndFlush(photo);
             audit.log(user.getUsername(), user.getRole().name(), "PHOTO_READING_UPLOAD", String.valueOf(photo.getId()),
                     RequestContext.getRequestId(), "DRAFT", null, meterId + ";engine=" + result.engine());
@@ -262,11 +268,20 @@ public class PhotoReadingService {
                 .map(value -> plain(new BigDecimal(value))).distinct().limit(10).toList();
         Double confidence = result.confidence();
         if (confidence != null && (!Double.isFinite(confidence) || confidence < 0 || confidence > 100)) confidence = null;
+        PhotoOcrEngine.Region region = result.region();
+        if (region != null && (region.x() < 0 || region.y() < 0 || region.width() <= 0 || region.height() <= 0
+                || (long) region.x() + region.width() > image.getWidth()
+                || (long) region.y() + region.height() > image.getHeight())) region = null;
         return new Recognition(limit(result.rawText(), 16000), values, confidence,
-                result.engine() == null ? "unavailable" : limit(result.engine(), 200), limit(result.error(), 2000));
+                result.engine() == null ? "unavailable" : limit(result.engine(), 200), limit(result.error(), 2000), region);
     }
 
     private void applyRecognition(PhotoReading photo, Recognition result, int rotation, PhotoReadingDto.Crop crop) {
+        if (result.region() != null) {
+            PhotoOcrEngine.Region region = result.region();
+            crop = new PhotoReadingDto.Crop(region.x() + (crop == null ? 0 : crop.x()),
+                    region.y() + (crop == null ? 0 : crop.y()), region.width(), region.height());
+        }
         photo.setRawText(result.rawText() == null ? "" : result.rawText());
         try { photo.setCandidatesJson(mapper.writeValueAsString(result.candidates())); }
         catch (IOException error) { throw new BusinessException(ErrorCode.INTERNAL_ERROR, "识别结果保存失败"); }
@@ -369,5 +384,10 @@ public class PhotoReadingService {
     private String limit(String value, int maximum) { return value == null ? null : value.substring(0, Math.min(value.length(), maximum)); }
     private BusinessException bad(String message) { return new BusinessException(ErrorCode.BAD_REQUEST, message); }
     private BusinessException conflict(String message) { return new BusinessException(ErrorCode.CONFLICT, message); }
-    private record Recognition(String rawText, List<String> candidates, Double confidence, String engine, String error) {}
+    private record Recognition(String rawText, List<String> candidates, Double confidence, String engine, String error,
+                               PhotoOcrEngine.Region region) {
+        Recognition(String rawText, List<String> candidates, Double confidence, String engine, String error) {
+            this(rawText, candidates, confidence, engine, error, null);
+        }
+    }
 }

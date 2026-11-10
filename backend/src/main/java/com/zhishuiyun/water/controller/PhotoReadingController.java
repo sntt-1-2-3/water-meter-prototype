@@ -17,8 +17,9 @@ public class PhotoReadingController {
     private final PhotoReadingService photos;
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ApiResponse<PhotoReadingDto> upload(@RequestParam String meterId, @RequestParam MultipartFile file) {
-        return ApiResponse.ok(photos.upload(meterId, file, CurrentUser.required()));
+    public ApiResponse<PhotoReadingDto> upload(@RequestParam String meterId, @RequestParam MultipartFile file,
+                                              @RequestParam(defaultValue = "true") boolean recognize) {
+        return ApiResponse.ok(photos.upload(meterId, file, CurrentUser.required(), recognize));
     }
 
     @GetMapping

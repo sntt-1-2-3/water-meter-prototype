@@ -27,7 +27,6 @@ const navItems = computed(() => {
   return items
 })
 const pageTitle = computed(() => String(route.meta.title || '智水云'))
-const pageDescription = computed(() => String(route.meta.description || '水务抄表收费管理系统'))
 function handleAccountCommand(command: string | number | object) {
   if (command !== 'logout') return
   ElMessageBox.confirm('是否退出当前账号？', '退出登录', { confirmButtonText: '退出登录', cancelButtonText: '取消' })
@@ -49,12 +48,12 @@ onBeforeUnmount(() => { if (noticeTimer) clearInterval(noticeTimer) })
     </aside>
     <main class="main-area">
       <header class="topbar">
-        <div class="topbar-left"><h1>{{ pageTitle }}</h1><p>{{ pageDescription }}</p></div>
+        <div class="topbar-left"><h1>{{ pageTitle }}</h1></div>
         <div class="mobile-brand"><el-button v-if="role !== 'USER'" class="mobile-menu-button" circle :icon="MenuIcon" aria-label="打开菜单" @click="mobileMenuVisible = true" /><BrandMark /><strong>智水云</strong></div>
         <div class="topbar-actions">
           <el-tag class="identity-tag" :type="role === 'AUDITOR' ? 'info' : 'primary'" effect="light">{{ title }}</el-tag>
           <el-badge :value="unreadCount" :hidden="unreadCount === 0" class="notice-badge"><el-button circle :icon="Bell" aria-label="打开通知中心" @click="notificationsVisible = true" /></el-badge>
-          <el-dropdown trigger="click" @command="handleAccountCommand"><button class="account-button" type="button"><el-avatar :size="34"><el-icon><UserFilled /></el-icon></el-avatar><span class="account-copy"><strong>{{ currentUser?.name }}</strong><small>{{ title }}</small></span><span class="account-arrow">⌄</span></button><template #dropdown><el-dropdown-menu><el-dropdown-item disabled>{{ currentUser?.username }}</el-dropdown-item><el-dropdown-item command="logout" divided><el-icon><SwitchButton /></el-icon>退出登录</el-dropdown-item></el-dropdown-menu></template></el-dropdown>
+          <el-dropdown trigger="click" @command="handleAccountCommand"><button class="account-button" type="button"><el-avatar :size="34"><el-icon><UserFilled /></el-icon></el-avatar><span class="account-copy"><strong>{{ currentUser?.name }}</strong></span><span class="account-arrow">⌄</span></button><template #dropdown><el-dropdown-menu><el-dropdown-item disabled>{{ currentUser?.username }}</el-dropdown-item><el-dropdown-item command="logout" divided><el-icon><SwitchButton /></el-icon>退出登录</el-dropdown-item></el-dropdown-menu></template></el-dropdown>
         </div>
       </header><router-view /><button class="ai-fab" type="button" aria-label="打开 AI 助手" @click="aiVisible = true"><el-icon><ChatDotRound /></el-icon><span>AI 助手</span></button>
     </main>

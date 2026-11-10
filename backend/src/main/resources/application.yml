@@ -42,6 +42,11 @@ jwt:
   # 有效期（分钟）
   expire-minutes: ${JWT_EXPIRE_MINUTES:480}
 
+photo:
+  ocr:
+    # Request wait limit; a busy native worker never queues more photos.
+    timeout-seconds: ${PHOTO_OCR_TIMEOUT_SECONDS:20}
+
 simulator:
   # Enable from the ADMIN reading page, or opt in at startup. No real hardware involved.
   enabled: ${SIMULATOR_ENABLED:false}
