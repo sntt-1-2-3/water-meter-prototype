@@ -2,11 +2,12 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { ChatDotRound, Tickets, TrendCharts, Warning } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { useSystemStore } from '../../stores/system'
 import { waterApi } from '../../api/water'
 import type { BillItem, UserSummary } from '../../types/domain'
-import { dateTime, errorMessage, money, number, paymentKey } from '../../utils/format'
+import { dateTime, errorMessage, money, number } from '../../utils/format'
+import PaymentQrDialog from '../../components/PaymentQrDialog.vue'
 import RequestState from '../../components/RequestState.vue'
 import BillItemsTable from '../../components/BillItemsTable.vue'
 import PaymentsTable from '../../components/PaymentsTable.vue'
@@ -17,6 +18,8 @@ const loading = ref(false)
 const error = ref('')
 const saving = ref(false)
 const payingId = ref<number | null>(null)
+const qrVisible = ref(false)
+const qrBillId = ref<number | null>(null)
 const panelVisible = ref(false)
 const panelType = ref<'trend' | 'bills' | 'feedback' | 'history' | 'payments'>('bills')
 const panelTitles = { trend: '近期用水趋势', bills: '个人账单', feedback: '提交异常反馈', history: '反馈处理记录', payments: '缴费流水' }
@@ -34,15 +37,9 @@ async function reload() {
 }
 function openPanel(type: typeof panelType.value) { panelType.value = type; panelVisible.value = true }
 async function pay(item: BillItem) {
-  if (payingId.value) return
-  try { await ElMessageBox.confirm('记录 ' + item.period + ' 的模拟缴费 ' + money(item.outstanding) + '？不会扣除真实资金。', '模拟缴费', { confirmButtonText: '确认记录', cancelButtonText: '取消' }) } catch { return }
-  payingId.value = item.id
-  try {
-    const { data } = await waterApi.payBill(item.id, paymentKey(item.id))
-    await reload(); await store.loadNotifications()
-    ElMessage.success('缴费已保存，流水号 ' + data.transactionNo)
-  } catch (e) { ElMessage.error(errorMessage(e)) } finally { payingId.value = null }
+  qrBillId.value = item.id; qrVisible.value = true
 }
+async function paymentUpdated() { await reload(); await store.loadNotifications() }
 async function submitFeedback() {
   if (feedback.description.trim().length < 5) return ElMessage.warning('问题描述至少需要 5 个字符')
   saving.value = true
@@ -62,7 +59,7 @@ onMounted(() => { void reload() })
     <RequestState :loading="loading" :error="error" @retry="reload" />
     <el-result v-if="!loading && !error && !isBound" icon="info" title="等待管理员绑定水表" sub-title="账号已创建。请联系管理员提供对应水表编号，绑定后刷新此页面即可查看个人用水和账单。" />
     <template v-if="!loading && !error && isBound">
-      <div class="user-primary-grid"><article class="bill-card"><span>{{ pendingBill ? pendingBill.period + ' 待缴账单' : '账单已结清' }}</span><strong>{{ money(pendingBill?.outstanding) }}</strong><p v-if="pendingBill">用水 {{ number(pendingBill.usage) }} m³ · 截止 {{ pendingBill.dueDate }}</p><p v-else>暂无待缴账单；可查询历史明细</p><el-button color="#ffffff" :loading="Boolean(payingId)" :disabled="!pendingBill" @click="pendingBill && pay(pendingBill)">模拟缴费</el-button></article>
+      <div class="user-primary-grid"><article class="bill-card"><span>{{ pendingBill ? pendingBill.period + ' 待缴账单' : '账单已结清' }}</span><strong>{{ money(pendingBill?.outstanding) }}</strong><p v-if="pendingBill">用水 {{ number(pendingBill.usage) }} m³ · 截止 {{ pendingBill.dueDate }}</p><p v-else>暂无待缴账单；可查询历史明细</p><el-button color="#ffffff" :disabled="!pendingBill" @click="pendingBill && pay(pendingBill)">扫码缴费（模拟）</el-button></article>
         <article class="usage-card panel"><div class="panel-head"><div><h2>当月用水</h2><p>后端账单及近期采集数据</p></div><el-tag>{{ summary?.status }}</el-tag></div><div class="usage-number"><strong>{{ number(summary?.usage) }}</strong><span>m³</span></div><div class="mini-bars" aria-label="近期每日用水"><i v-for="item in summary?.trend.slice(-14)" :key="item.date" :title="item.date + '：' + number(item.usage) + ' m³'" :style="{ height: Math.max(3, Number(item.usage) / trendMax * 100) + '%' }"></i></div><p class="muted">当月应收 {{ money(summary?.amount) }} · 已缴 {{ money(summary?.paid) }}</p></article>
       </div>
       <div class="user-action-grid">
@@ -74,8 +71,9 @@ onMounted(() => { void reload() })
       <section class="panel data-panel"><div class="panel-head"><div><h2>个人水表异常</h2><p>仅显示本人绑定水表的事件及处理状态</p></div><el-button @click="openPanel('feedback')">提交反馈</el-button></div><el-table :data="anomalies" empty-text="个人水表暂无异常事件"><el-table-column prop="type" label="异常类型" min-width="140" /><el-table-column prop="level" label="风险" width="80" /><el-table-column prop="status" label="状态" width="100" /><el-table-column prop="suggestion" label="处理建议" min-width="220" /><el-table-column label="时间" min-width="160"><template #default="{ row }">{{ dateTime(row.time) }}</template></el-table-column></el-table></section>
       <section class="panel data-panel section-gap"><div class="panel-head"><div><h2>最近反馈</h2><p>处理状态与结果由后台更新</p></div><div><el-button @click="openPanel('history')">全部反馈</el-button><el-button @click="openPanel('payments')">缴费流水</el-button></div></div><el-table :data="feedbackRecords.slice(0, 5)" empty-text="暂无反馈记录"><el-table-column prop="id" label="编号" width="80" /><el-table-column prop="type" label="类型" min-width="120" /><el-table-column prop="description" label="问题" min-width="200" /><el-table-column prop="status" label="状态" width="100" /><el-table-column prop="resolution" label="处理结果" min-width="200" /></el-table></section>
     </template>
+    <PaymentQrDialog v-model="qrVisible" :bill-id="qrBillId" @paid="paymentUpdated" />
     <el-dialog v-model="panelVisible" :title="panelTitles[panelType]" width="min(1100px, 94vw)">
-      <BillItemsTable v-if="panelType === 'bills'" :items="billItems" allow-pay :busy-id="payingId" @pay="pay" />
+      <BillItemsTable v-if="panelType === 'bills'" :items="billItems" allow-pay pay-label="扫码缴费" :busy-id="payingId" @pay="pay" />
       <PaymentsTable v-else-if="panelType === 'payments'" :items="payments" />
       <el-table v-else-if="panelType === 'trend'" :data="summary?.trend || []" empty-text="暂无采集趋势"><el-table-column prop="date" label="日期" /><el-table-column label="用水量"><template #default="{ row }">{{ number(row.usage) }} m³</template></el-table-column></el-table>
       <el-table v-else-if="panelType === 'history'" :data="feedbackRecords" empty-text="暂无反馈"><el-table-column prop="id" label="编号" width="80" /><el-table-column prop="type" label="类型" min-width="110" /><el-table-column prop="description" label="问题" min-width="180" /><el-table-column prop="status" label="状态" width="100" /><el-table-column prop="resolution" label="处理结果" min-width="200" /><el-table-column prop="handledBy" label="处理人" min-width="100" /><el-table-column label="更新时间" min-width="160"><template #default="{ row }">{{ dateTime(row.updatedAt) }}</template></el-table-column></el-table>

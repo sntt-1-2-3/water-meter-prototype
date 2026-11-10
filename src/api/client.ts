@@ -12,12 +12,14 @@ apiClient.interceptors.request.use((config) => {
   if (!useRealApi) throw new Error('请将 VITE_USE_REAL_API 设置为 true 后重启前端')
   const token = readToken()
   if (token) config.headers.Authorization = 'Bearer ' + token
+  if (config.data instanceof FormData) config.headers.delete('Content-Type')
   return config
 })
 apiClient.interceptors.response.use(
   (response) => {
     const sentToken = String(response.config.headers.Authorization || '')
     if (sentToken && sentToken !== 'Bearer ' + readToken()) throw new Error('账号已切换，请刷新数据')
+    if (response.config.responseType === 'blob') return response
     const body = response.data as ApiResponse<unknown>
     if (body.code !== 'OK') throw new Error(body.message || '服务器返回了无法识别的响应')
     response.data = body.data

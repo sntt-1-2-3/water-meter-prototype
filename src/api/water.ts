@@ -27,6 +27,7 @@ export const waterApi = {
   getBills: () => apiClient.get<BillBatch[]>('/bills'),
   getBillItems: (batch?: string, period?: string) => apiClient.get<BillItem[]>('/bills/items', { params: { batch, period } }),
   getPayments: () => apiClient.get<Payment[]>('/bills/payments'),
+  getBillItem: (id: number) => apiClient.get<BillItem>('/bills/items/' + id),
   payBill: (id: number, idempotencyKey: string) => apiClient.post<Payment>('/bills/items/' + id + '/pay', { idempotencyKey }),
   recalculateBills: (period?: string, dueDate?: string) => apiClient.post<BillBatch[]>('/bills/recalculate', { period, dueDate }),
   getPriceRules: () => apiClient.get<PriceRule[]>('/bills/rules'),

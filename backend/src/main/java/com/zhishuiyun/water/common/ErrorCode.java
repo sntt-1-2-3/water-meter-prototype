@@ -12,6 +12,8 @@ public enum ErrorCode {
     // ---- 通用 ----
     OK("OK", 200, "成功"),
     BAD_REQUEST("BAD_REQUEST", 400, "请求参数错误"),
+    CONFLICT("CONFLICT", 409, "数据已变更，请刷新后重新确认"),
+    UPLOAD_TOO_LARGE("UPLOAD_TOO_LARGE", 413, "照片不得超过 8 MB"),
     VALIDATION_FAILED("VALIDATION_FAILED", 400, "参数校验失败"),
     UNAUTHORIZED("UNAUTHORIZED", 401, "未登录或会话已过期"),
     FORBIDDEN("FORBIDDEN", 403, "无权限执行该操作"),

@@ -1,7 +1,7 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import {
-  ElAvatar, ElBadge, ElButton, ElDialog, ElDrawer, ElDropdown, ElDropdownItem,
+  ElAlert, ElAvatar, ElBadge, ElButton, ElDialog, ElDrawer, ElDropdown, ElDropdownItem,
   ElDropdownMenu, ElForm, ElFormItem, ElIcon,
   ElInput, ElInputNumber, ElMenu, ElMenuItem, ElOption, ElPagination, ElProgress,
   ElRadioButton, ElRadioGroup, ElResult, ElSelect, ElSkeleton, ElTable,
@@ -17,7 +17,7 @@ import { authExpiredEvent } from './utils/session'
 const app = createApp(App)
 
 const elementComponents = [
-  ElAvatar, ElBadge, ElButton, ElDialog, ElDrawer, ElDropdown, ElDropdownItem,
+  ElAlert, ElAvatar, ElBadge, ElButton, ElDialog, ElDrawer, ElDropdown, ElDropdownItem,
   ElDropdownMenu, ElForm, ElFormItem, ElIcon,
   ElInput, ElInputNumber, ElMenu, ElMenuItem, ElOption, ElPagination, ElProgress,
   ElRadioButton, ElRadioGroup, ElResult, ElSelect, ElSkeleton, ElTable,
@@ -30,7 +30,8 @@ const pinia = createPinia()
 app.use(pinia)
 window.addEventListener(authExpiredEvent, () => {
   useSystemStore(pinia).logout()
-  if (router.currentRoute.value.path !== '/login') void router.replace('/login')
+  const currentPath = router.currentRoute.value.path
+  if (currentPath !== '/login') void router.replace({ path: '/login', query: /^\/pay\/[1-9]\d*$/.test(currentPath) ? { redirect: currentPath } : {} })
 })
 app
   .use(router)

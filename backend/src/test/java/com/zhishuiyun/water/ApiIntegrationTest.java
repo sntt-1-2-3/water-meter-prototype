@@ -382,11 +382,20 @@ class ApiIntegrationTest {
     void billingPaymentIsPersistentIdempotentAndServerCalculated() throws Exception {
         BoundFixture fixture = boundFixture("滨江花园");
         String period = YearMonth.now().toString();
+        // At the start of a month, subtracting three days can fall before the requested billing period.
+        LocalDate firstDay = YearMonth.now().atDay(1);
+        LocalDate deadline = LocalDate.now().minusDays(3);
+        if (deadline.isBefore(firstDay)) deadline = firstDay;
         data("POST", "/api/bills/recalculate", Map.of("period", period,
-                "dueDate", LocalDate.now().minusDays(3).toString()), finance);
+                "dueDate", deadline.toString()), finance);
         JsonNode bill = findBy(data("GET", "/api/bills/items?period=" + period, null, fixture.token()), "meterId", fixture.meterId());
         long id = bill.path("id").asLong();
         assertThat(id).isPositive();
+        exchange("GET", "/api/bills/items/" + id, null, null, 401);
+        exchange("GET", "/api/bills/items/" + id, null, resident, 403);
+        JsonNode scanned = data("GET", "/api/bills/items/" + id, null, fixture.token());
+        assertThat(scanned.path("meterId").asText()).isEqualTo(fixture.meterId());
+        assertThat(scanned.path("paidAmount").decimalValue()).isEqualByComparingTo("0");
         assertThat(bill.path("totalDue").decimalValue()).isPositive();
         exchange("POST", "/api/bills/items/" + id + "/pay", Map.of("idempotencyKey", "stolen-payment"), resident, 403);
         Map<String, Object> paymentBody = Map.of("idempotencyKey", "test-payment-" + id, "amount", 0.01);
@@ -395,12 +404,27 @@ class ApiIntegrationTest {
         assertThat(payment.path("id").asText()).isEqualTo(repeated.path("id").asText());
         JsonNode paid = findBy(data("GET", "/api/bills/items?period=" + period, null, fixture.token()), "meterId", fixture.meterId());
         assertThat(paid.path("status").asText()).isEqualTo("已缴");
+        assertThat(data("GET", "/api/bills/items/" + id, null, fixture.token()).path("status").asText()).isEqualTo("已缴");
         assertThat(paid.path("paidAmount").decimalValue()).isEqualByComparingTo(paid.path("totalDue").decimalValue());
         assertThat(data("GET", "/api/bills/payments", null, fixture.token())).hasSize(1);
         data("POST", "/api/bills/recalculate", Map.of("period", period), admin);
         JsonNode preserved = findBy(data("GET", "/api/bills/items?period=" + period, null, fixture.token()), "meterId", fixture.meterId());
         assertThat(preserved.path("status").asText()).isEqualTo("已缴");
         assertThat(preserved.path("paidAmount").decimalValue()).isEqualByComparingTo(paid.path("paidAmount").decimalValue());
+    }
+
+    @Test
+    void targetedBillingCreatesOnlySelectedMeterAndIsIdempotent() throws Exception {
+        BoundFixture selected = boundFixture("滨江花园");
+        BoundFixture other = boundFixture("滨江花园");
+        Map<String, String> body = Map.of("period", YearMonth.now().toString(), "meterId", selected.meterId());
+        exchange("POST", "/api/bills/recalculate", body, selected.token(), 403);
+        data("POST", "/api/bills/recalculate", body, admin);
+        JsonNode items = data("GET", "/api/bills/items", null, admin);
+        assertThat(matching(items, "meterId", selected.meterId())).hasSize(1);
+        assertThat(matching(items, "meterId", other.meterId())).isEmpty();
+        data("POST", "/api/bills/recalculate", body, finance);
+        assertThat(matching(data("GET", "/api/bills/items", null, admin), "meterId", selected.meterId())).hasSize(1);
     }
 
     @Test
